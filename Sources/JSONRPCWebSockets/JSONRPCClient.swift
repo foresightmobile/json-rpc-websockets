@@ -12,7 +12,7 @@ public class JSONRPCClient: NSObject {
     private var webSocketTask: URLSessionWebSocketTask?
 
     private var open: (() -> Void)?
-    private var receivables = Dictionary<String, (Data) -> Void>()
+    private var receivables = Dictionary<String, JSONRPCReceivable>()
     
     public func connect(url: URL, completion: @escaping () -> Void) {
         open = completion
@@ -23,26 +23,34 @@ public class JSONRPCClient: NSObject {
         receive()
     }
     
-    public func call<T: Encodable, U: Decodable>(method: String, params: T, response: U.Type, completion: @escaping (U?) -> Void) {
+    public func call<T: Encodable, U: Decodable>(method: String, params: T, response: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
         let request = JSONRPCRequest(method: method, params: params)
         
         guard let data = try? JSONEncoder().encode(request), let string = String(data: data, encoding: .utf8) else {
             fatalError("Could not encode request.")
         }
         
-        receivables[request.id] = { data in
+        let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { timer in
+            // Remove the receivable if the request hasn't received a response within the timeout.
+            self.receivables.removeValue(forKey: request.id)
+        }
+        
+        let receivable = JSONRPCReceivable(timer: timer, completion: { data in
             if let response = try? JSONDecoder().decode(JSONRPCResponse<U>.self, from: data) {
                 if request.id == response.id {
+                    
+                    // Invalidate the current timeout timer which is running.
+                    self.receivables[request.id]?.timer.invalidate()
+                    
                     // Remove the receivable once the request has been paired with a matching response.
                     self.receivables.removeValue(forKey: request.id)
                     
-                    print("Process response with id... \(response.id)")
-                    print(response)
-
                     completion(response.result)
                 }
             }
-        }
+        })
+        
+        receivables[request.id] = receivable
         
         let message = URLSessionWebSocketTask.Message.string(string)
         webSocketTask?.send(message) { error in
@@ -61,8 +69,11 @@ public class JSONRPCClient: NSObject {
                     print("Received data: \(data.count)")
                 case .string(let string):
                     if let data = string.data(using: .utf8) {
-                        self.receivables.forEach {
-                            $0.value(data)
+                        // Only tinker with our receivables on the main thread.
+                        DispatchQueue.main.async {
+                            self.receivables.forEach {
+                                $0.value.completion(data)
+                            }
                         }
                     }
                 default:
