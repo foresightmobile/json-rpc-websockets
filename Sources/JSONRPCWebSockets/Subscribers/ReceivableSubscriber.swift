@@ -7,12 +7,7 @@
 
 import Foundation
 
-class ReceivableSubscriber {
+struct ReceivableSubscriber {
     let timer: Timer
     let completion: (Data) -> Void
-    
-    init(timer: Timer, completion: @escaping (Data) -> Void) {
-        self.timer = timer
-        self.completion = completion
-    }
 }
