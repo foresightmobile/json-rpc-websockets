@@ -68,7 +68,7 @@ public class JSONRPCClient: NSObject {
     
     public func subscribe<T: Codable>(to method: String, type: T.Type) throws {
         guard notificationSubscribers.first(where: { $0.method == method }) == nil else {
-            throw JSONRPCError.duplicateSubscription
+            throw ClientError.duplicateSubscription
         }
         
         notificationSubscribers.append(NotificationSubscriber(method: method, completion: nil))

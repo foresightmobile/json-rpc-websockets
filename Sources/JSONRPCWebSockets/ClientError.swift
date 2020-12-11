@@ -1,5 +1,5 @@
 //
-//  JSONRPCError.swift
+//  ClientError.swift
 //  
 //
 //  Created by Michael Hamer on 12/11/20.
@@ -7,6 +7,6 @@
 
 import Foundation
 
-enum JSONRPCError: Error {
+enum ClientError: Error {
     case duplicateSubscription
 }
