@@ -25,8 +25,8 @@ public class Client: NSObject {
         receive()
     }
     
-    public func call<T: Codable, U: Decodable>(method: String, params: T, response: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
-        let request = Request(method: method, params: params)
+    public func call<T: Codable, U: Decodable>(method: String, parameters: T, type: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
+        let request = Request(method: method, parameters: parameters)
         
         guard let data = try? JSONEncoder().encode(request), let string = String(data: data, encoding: .utf8) else {
             fatalError("Could not encode request.")

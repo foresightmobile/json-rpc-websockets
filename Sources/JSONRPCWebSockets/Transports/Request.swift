@@ -8,15 +8,22 @@
 import Foundation
 
 struct Request<T: Codable>: Codable {
-    var jsonrpc: String
-    var id: String?
-    var method: String
-    var params: T
+    let jsonRPC: String
+    let id: String?
+    let method: String
+    let parameters: T
     
-    init(method: String, params: T) {
-        self.jsonrpc = "2.0"
+    init(method: String, parameters: T) {
+        self.jsonRPC = "2.0"
         self.id = UUID().uuidString
         self.method = method
-        self.params = params
+        self.parameters = parameters
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case jsonRPC = "jsonrpc"
+        case id
+        case method
+        case parameters = "params"
     }
 }

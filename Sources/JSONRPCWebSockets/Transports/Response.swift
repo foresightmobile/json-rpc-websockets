@@ -8,7 +8,13 @@
 import Foundation
 
 struct Response<T: Decodable>: Decodable {
-    let jsonrpc: String
+    let jsonRPC: String
     let id: String
     let result: T?
+    
+    enum CodingKeys: String, CodingKey {
+        case jsonRPC = "jsonrpc"
+        case id
+        case result
+    }
 }
