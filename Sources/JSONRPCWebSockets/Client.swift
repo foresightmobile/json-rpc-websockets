@@ -1,5 +1,5 @@
 //
-//  JSONRPCClient.swift
+//  Client.swift
 //  
 //
 //  Created by Michael Hamer on 12/4/20.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-public class JSONRPCClient: NSObject {
+public class Client: NSObject {
     private var urlSession: URLSession?
     private var webSocketTask: URLSessionWebSocketTask?
 
@@ -26,7 +26,7 @@ public class JSONRPCClient: NSObject {
     }
     
     public func call<T: Codable, U: Decodable>(method: String, params: T, response: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
-        let request = JSONRPCRequest(method: method, params: params)
+        let request = Request(method: method, params: params)
         
         guard let data = try? JSONEncoder().encode(request), let string = String(data: data, encoding: .utf8) else {
             fatalError("Could not encode request.")
@@ -40,7 +40,7 @@ public class JSONRPCClient: NSObject {
         }
         
         let receivable = ReceivableSubscriber(timer: timer, completion: { data in
-            if let response = try? JSONDecoder().decode(JSONRPCResponse<U>.self, from: data) {
+            if let response = try? JSONDecoder().decode(Response<U>.self, from: data) {
                 if let id = request.id, id == response.id {
                     
                     // Invalidate the current timeout timer which is running.
@@ -67,6 +67,7 @@ public class JSONRPCClient: NSObject {
     }
     
     public func subscribe<T: Codable>(to method: String, type: T.Type) throws {
+        // Only allow subscribing to a method once.
         guard notificationSubscribers.first(where: { $0.method == method }) == nil else {
             throw ClientError.duplicateSubscription
         }
@@ -128,7 +129,7 @@ public class JSONRPCClient: NSObject {
     }
 }
 
-extension JSONRPCClient: URLSessionWebSocketDelegate {
+extension Client: URLSessionWebSocketDelegate {
     public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
         open?()
     }

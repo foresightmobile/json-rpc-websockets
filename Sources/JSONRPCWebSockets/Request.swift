@@ -1,5 +1,5 @@
 //
-//  JSONRPCRequest.swift
+//  Request.swift
 //  
 //
 //  Created by Michael Hamer on 12/8/20.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct JSONRPCRequest<T: Codable>: Codable {
+struct Request<T: Codable>: Codable {
     var jsonrpc: String
     var id: String?
     var method: String
