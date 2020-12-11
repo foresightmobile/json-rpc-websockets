@@ -126,6 +126,10 @@ public class Client: NSObject {
                         self.receivableSubscribers.forEach {
                             $0.completion(data)
                         }
+                        
+                        self.notificationSubscribers.forEach {
+                            $0.completion?(data)
+                        }
                     }
                 default:
                     fatalError("Unknown success message received.")
