@@ -8,6 +8,7 @@
 import Foundation
 
 struct ReceivableSubscriber {
+    let id: String
     let timer: Timer
     let completion: (Data) -> Void
 }
