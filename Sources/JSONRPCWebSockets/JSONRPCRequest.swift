@@ -7,9 +7,9 @@
 
 import Foundation
 
-struct JSONRPCRequest<T: Encodable>: Encodable {
+struct JSONRPCRequest<T: Codable>: Codable {
     var jsonrpc: String
-    var id: String
+    var id: String?
     var method: String
     var params: T
     

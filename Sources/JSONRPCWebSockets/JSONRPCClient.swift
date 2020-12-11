@@ -12,7 +12,9 @@ public class JSONRPCClient: NSObject {
     private var webSocketTask: URLSessionWebSocketTask?
 
     private var open: (() -> Void)?
-    private var receivables = Dictionary<String, JSONRPCReceivable>()
+    
+    private var receivableSubscribers = Dictionary<String, ReceivableSubscriber>()
+    private var notificationSubscribers = [NotificationSubscriber]()
     
     public func connect(url: URL, completion: @escaping () -> Void) {
         open = completion
@@ -23,7 +25,7 @@ public class JSONRPCClient: NSObject {
         receive()
     }
     
-    public func call<T: Encodable, U: Decodable>(method: String, params: T, response: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
+    public func call<T: Codable, U: Decodable>(method: String, params: T, response: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
         let request = JSONRPCRequest(method: method, params: params)
         
         guard let data = try? JSONEncoder().encode(request), let string = String(data: data, encoding: .utf8) else {
@@ -32,31 +34,69 @@ public class JSONRPCClient: NSObject {
         
         let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { timer in
             // Remove the receivable if the request hasn't received a response within the timeout.
-            self.receivables.removeValue(forKey: request.id)
+            if let id = request.id {
+                self.receivableSubscribers.removeValue(forKey: id)
+            }
         }
         
-        let receivable = JSONRPCReceivable(timer: timer, completion: { data in
+        let receivable = ReceivableSubscriber(timer: timer, completion: { data in
             if let response = try? JSONDecoder().decode(JSONRPCResponse<U>.self, from: data) {
-                if request.id == response.id {
+                if let id = request.id, id == response.id {
                     
                     // Invalidate the current timeout timer which is running.
-                    self.receivables[request.id]?.timer.invalidate()
+                    self.receivableSubscribers[id]?.timer.invalidate()
                     
                     // Remove the receivable once the request has been paired with a matching response.
-                    self.receivables.removeValue(forKey: request.id)
+                    self.receivableSubscribers.removeValue(forKey: id)
                     
                     completion(response.result)
                 }
             }
         })
         
-        receivables[request.id] = receivable
+        if let id = request.id {
+            receivableSubscribers[id] = receivable
+        }
         
         let message = URLSessionWebSocketTask.Message.string(string)
         webSocketTask?.send(message) { error in
             if let error = error {
                 print(error.localizedDescription)
             }
+        }
+    }
+    
+    public func subscribe<T: Codable>(to method: String, type: T.Type) throws {
+        guard notificationSubscribers.first(where: { $0.method == method }) == nil else {
+            throw JSONRPCError.duplicateSubscription
+        }
+        
+        notificationSubscribers.append(NotificationSubscriber(method: method, completion: nil))
+    }
+    
+    public func on<T: Codable>(method: String, type: T.Type, completion: @escaping (T) -> Void) {
+        if let index = notificationSubscribers.firstIndex(where: { $0.method == method }) {
+            notificationSubscribers[index].completion = { data in
+                // Attempt to decode the data to a matching type.
+                guard let notification = try? JSONDecoder().decode(T.self, from: data) else {
+                    return
+                }
+                
+                // There's a chance that two methods point to one type.
+                guard self.notificationSubscribers[index].method == method else {
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    completion(notification)
+                }
+            }
+        }
+    }
+    
+    public func unsubscribe(from method: String) {
+        if let index = notificationSubscribers.firstIndex(where: { $0.method == method }) {
+            notificationSubscribers.remove(at: index)
         }
     }
 
@@ -71,7 +111,7 @@ public class JSONRPCClient: NSObject {
                     if let data = string.data(using: .utf8) {
                         // Only tinker with our receivables on the main thread.
                         DispatchQueue.main.async {
-                            self.receivables.forEach {
+                            self.receivableSubscribers.forEach {
                                 $0.value.completion(data)
                             }
                         }

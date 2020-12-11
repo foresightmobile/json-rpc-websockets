@@ -1,5 +1,5 @@
 //
-//  JSONRPCReceivable.swift
+//  ReceivableSubscriber.swift
 //  
 //
 //  Created by Michael Hamer on 12/10/20.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-class JSONRPCReceivable {
+class ReceivableSubscriber {
     let timer: Timer
     let completion: (Data) -> Void
     
