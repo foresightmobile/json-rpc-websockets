@@ -1,7 +1,7 @@
 import XCTest
 
-import json_rpc_websocketsTests
+import JSONRPCWebSocketsTests
 
 var tests = [XCTestCaseEntry]()
-tests += json_rpc_websocketsTests.allTests()
+tests += JSONRPCWebSocketsTests.allTests()
 XCTMain(tests)
