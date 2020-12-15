@@ -25,6 +25,21 @@ public class Client: NSObject {
         receive()
     }
     
+    public func notify<T: Codable>(method: String, parameters: T, completion: @escaping (Error?) -> Void) throws {
+        let request = Request(id: nil, method: method, parameters: parameters)
+        
+        let data = try JSONEncoder().encode(request)
+        
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw ClientError.invalidData(encoding: .utf8)
+        }
+        
+        let message = URLSessionWebSocketTask.Message.string(string)
+        webSocketTask?.send(message) { error in
+            completion(error)
+        }
+    }
+    
     public func call<T: Codable, U: Decodable>(method: String, parameters: T, type: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
         let request = Request(method: method, parameters: parameters)
         

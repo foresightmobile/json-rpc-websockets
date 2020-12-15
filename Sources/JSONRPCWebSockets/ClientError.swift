@@ -8,5 +8,6 @@
 import Foundation
 
 enum ClientError: Error {
+    case invalidData(encoding: String.Encoding)
     case duplicateSubscription
 }
