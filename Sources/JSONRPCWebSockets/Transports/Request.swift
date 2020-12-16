@@ -13,9 +13,9 @@ struct Request<T: Codable>: Codable {
     let method: String
     let parameters: T
     
-    init(method: String, parameters: T) {
+    init(id: String? = UUID().uuidString, method: String, parameters: T) {
         self.jsonRPC = "2.0"
-        self.id = UUID().uuidString
+        self.id = id
         self.method = method
         self.parameters = parameters
     }
