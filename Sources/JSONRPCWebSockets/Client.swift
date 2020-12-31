@@ -34,6 +34,10 @@ public class Client: NSObject {
             throw ClientError.invalidData(encoding: .utf8)
         }
         
+        #if DEBUG
+        print("--> \(string)")
+        #endif
+        
         let message = URLSessionWebSocketTask.Message.string(string)
         webSocketTask?.send(message) { error in
             completion(error)
@@ -83,6 +87,10 @@ public class Client: NSObject {
         }
         
         receivableSubscribers.append(ReceivableSubscriber(id: id, timer: timer, completion: completion))
+        
+        #if DEBUG
+        print("--> \(string)")
+        #endif
         
         let message = URLSessionWebSocketTask.Message.string(string)
         webSocketTask?.send(message) { error in
@@ -134,8 +142,7 @@ public class Client: NSObject {
                     print("Received data: \(data.count)")
                 case .string(let string):
                     #if DEBUG
-                    print("Incoming WebSocket string.")
-                    print(string)
+                    print("<-- \(string)")
                     #endif
                     
                     guard let data = string.data(using: .utf8) else {
