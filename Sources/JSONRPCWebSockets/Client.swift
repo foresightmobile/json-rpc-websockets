@@ -40,17 +40,19 @@ public class Client: NSObject {
         }
     }
     
-    public func call<T: Codable, U: Decodable>(method: String, parameters: T, type: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) {
+    public func call<T: Codable, U: Decodable>(method: String, parameters: T, type: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) throws {
         let request = Request(method: method, parameters: parameters)
         
         guard let id = request.id else {
             return
         }
         
-        guard let data = try? JSONEncoder().encode(request), let string = String(data: data, encoding: .utf8) else {
-            fatalError("Could not encode request.")
-        }
+        let data = try JSONEncoder().encode(request)
         
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw ClientError.invalidData(encoding: .utf8)
+        }
+
         let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { timer in
             // Remove the receivable if the request hasn't received a response within the timeout.
             if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
@@ -133,6 +135,11 @@ public class Client: NSObject {
                 case .data(let data):
                     print("Received data: \(data.count)")
                 case .string(let string):
+                    #if DEBUG
+                    print("Incoming WebSocket string.")
+                    print(string)
+                    #endif
+                    
                     guard let data = string.data(using: .utf8) else {
                         return
                     }
