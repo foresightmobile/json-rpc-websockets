@@ -9,5 +9,5 @@ import Foundation
 
 struct NotificationSubscriber {
     let method: String
-    var completion: ((Data) -> Void)?
+    var completion: ((Data) throws -> Void)?
 }
