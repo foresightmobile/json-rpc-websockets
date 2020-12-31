@@ -105,9 +105,7 @@ public class Client: NSObject {
         if let index = notificationSubscribers.firstIndex(where: { $0.method == method }) {
             notificationSubscribers[index].completion = { data in
                 // Attempt to decode the data to a matching type.
-                guard let notification = try? JSONDecoder().decode(T.self, from: data) else {
-                    return
-                }
+                let notification = try JSONDecoder().decode(Request<T>.self, from: data)
                 
                 // There's a chance that two methods point to one type.
                 guard self.notificationSubscribers[index].method == method else {
@@ -115,7 +113,7 @@ public class Client: NSObject {
                 }
                 
                 DispatchQueue.main.async {
-                    completion(notification)
+                    completion(notification.parameters)
                 }
             }
         }
@@ -150,7 +148,11 @@ public class Client: NSObject {
                         }
                         
                         self.notificationSubscribers.forEach {
-                            $0.completion?(data)
+                            do {
+                                try $0.completion?(data)
+                            } catch {
+                                print(error.localizedDescription)
+                            }
                         }
                     }
                 default:
