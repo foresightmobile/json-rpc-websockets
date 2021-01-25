@@ -11,18 +11,27 @@ public class Client: NSObject {
     private var urlSession: URLSession?
     private var webSocketTask: URLSessionWebSocketTask?
 
-    private var open: (() -> Void)?
+    private var connectCompletion: (() -> Void)?
+    private var disconnectCompletion: (() -> Void)?
     
     private var receivableSubscribers = [ReceivableSubscriber]()
     private var notificationSubscribers = [NotificationSubscriber]()
     
-    public func connect(url: URL, completion: @escaping () -> Void) {
-        open = completion
+    public func connect(url: URL, queue: OperationQueue? = nil, completion: @escaping () -> Void) {
+        connectCompletion = completion
         
-        urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
+        urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: queue)
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
+        
         receive()
+        ping()
+    }
+    
+    public func disconnect(completion: @escaping () -> Void) {
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        
+        disconnectCompletion = completion
     }
     
     public func notify<T: Codable>(method: String, parameters: T, completion: @escaping (Error?) -> Void) throws {
@@ -120,9 +129,7 @@ public class Client: NSObject {
                     return
                 }
                 
-                DispatchQueue.main.async {
-                    completion(notification.parameters)
-                }
+                completion(notification.parameters)
             }
         }
     }
@@ -149,17 +156,15 @@ public class Client: NSObject {
                         return
                     }
                     
-                    DispatchQueue.main.async {
-                        self.receivableSubscribers.forEach {
-                            $0.completion(data)
-                        }
-                        
-                        self.notificationSubscribers.forEach {
-                            do {
-                                try $0.completion?(data)
-                            } catch {
-                                print(error.localizedDescription)
-                            }
+                    self.receivableSubscribers.forEach {
+                        $0.completion(data)
+                    }
+                    
+                    self.notificationSubscribers.forEach {
+                        do {
+                            try $0.completion?(data)
+                        } catch {
+                            print(error.localizedDescription)
                         }
                     }
                 default:
@@ -172,10 +177,26 @@ public class Client: NSObject {
             self.receive()
         }
     }
+    
+    private func ping() {
+        webSocketTask?.sendPing { error in
+            if let error = error {
+                print("Error sending ping: \(error.localizedDescription)")
+            } else {
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
+                    self.ping()
+                }
+            }
+        }
+    }
 }
 
 extension Client: URLSessionWebSocketDelegate {
     public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        open?()
+        connectCompletion?()
+    }
+    
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        disconnectCompletion?()
     }
 }
