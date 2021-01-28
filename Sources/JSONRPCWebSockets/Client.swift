@@ -34,7 +34,7 @@ public class Client: NSObject {
         disconnectCompletion = completion
     }
     
-    public func notify<T: Codable>(method: String, parameters: T, completion: @escaping (Result<(), Error>) -> ()) {
+    public func notify<T: Codable>(method: String, parameters: T, completion: @escaping (Result<(), Error>) -> Void) {
         let request = Request(id: nil, method: method, parameters: parameters)
         
         do {
