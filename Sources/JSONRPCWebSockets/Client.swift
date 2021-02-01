@@ -34,22 +34,26 @@ public class Client: NSObject {
         disconnectCompletion = completion
     }
     
-    public func notify<T: Codable>(method: String, parameters: T, completion: @escaping (Error?) -> Void) throws {
+    public func notify<T: Codable>(method: String, parameters: T, completion: @escaping (Result<(), Error>) -> Void) {
         let request = Request(id: nil, method: method, parameters: parameters)
         
-        let data = try JSONEncoder().encode(request)
-        
-        guard let string = String(data: data, encoding: .utf8) else {
-            throw ClientError.invalidData(encoding: .utf8)
-        }
-        
-        #if DEBUG
-        print("--> \(string)")
-        #endif
-        
-        let message = URLSessionWebSocketTask.Message.string(string)
-        webSocketTask?.send(message) { error in
-            completion(error)
+        do {
+            let data = try JSONEncoder().encode(request)
+            
+            guard let string = String(data: data, encoding: .utf8) else {
+                throw ClientError.invalid(data: data, encoding: .utf8)
+            }
+            
+            let message = URLSessionWebSocketTask.Message.string(string)
+            webSocketTask?.send(message) { error in
+                if let error = error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
+            }
+        } catch {
+            completion(.failure(error))
         }
     }
     
@@ -63,7 +67,7 @@ public class Client: NSObject {
         let data = try JSONEncoder().encode(request)
         
         guard let string = String(data: data, encoding: .utf8) else {
-            throw ClientError.invalidData(encoding: .utf8)
+            throw ClientError.invalid(data: data, encoding: .utf8)
         }
 
         let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { timer in
@@ -123,9 +127,9 @@ public class Client: NSObject {
             notificationSubscribers[index].completion = { data in
                 // Attempt to decode the data to a matching type.
                 let notification = try JSONDecoder().decode(Request<T>.self, from: data)
-                
+
                 // There's a chance that two methods point to one type.
-                guard self.notificationSubscribers[index].method == method else {
+                guard self.notificationSubscribers[index].method == notification.method else {
                     return
                 }
                 
