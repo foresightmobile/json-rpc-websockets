@@ -127,9 +127,9 @@ public class Client: NSObject {
             notificationSubscribers[index].completion = { data in
                 // Attempt to decode the data to a matching type.
                 let notification = try JSONDecoder().decode(Request<T>.self, from: data)
-                
+
                 // There's a chance that two methods point to one type.
-                guard self.notificationSubscribers[index].method == method else {
+                guard self.notificationSubscribers[index].method == notification.method else {
                     return
                 }
                 
