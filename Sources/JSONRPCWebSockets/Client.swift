@@ -57,55 +57,60 @@ public class Client: NSObject {
         }
     }
     
-    public func call<T: Codable, U: Decodable>(method: String, parameters: T, type: U.Type, timeout: TimeInterval = 5, completion: @escaping (U?) -> Void) throws {
+    public func call<T: Codable, U: Decodable>(method: String, parameters: T, type: U.Type, timeout: TimeInterval = 5, completion: @escaping (Result<U?, Error>) -> Void) {
         let request = Request(method: method, parameters: parameters)
         
         guard let id = request.id else {
             return
         }
         
-        let data = try JSONEncoder().encode(request)
-        
-        guard let string = String(data: data, encoding: .utf8) else {
-            throw ClientError.invalid(data: data, encoding: .utf8)
-        }
+        do {
+            let data = try JSONEncoder().encode(request)
+            
+            guard let string = String(data: data, encoding: .utf8) else {
+                completion(.failure(ClientError.invalid(data: data, encoding: .utf8)))
+                return
+            }
 
-        let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { timer in
-            // Remove the receivable if the request hasn't received a response within the timeout.
-            if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
-                self.receivableSubscribers.remove(at: index)
-            }
-        }
-        
-        let completion = { (data: Data) in
-            // Attempt to decode the data to a matching type.
-            guard let response = try? JSONDecoder().decode(Response<U>.self, from: data) else {
-                return
+            let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { timer in
+                // Remove the receivable if the request hasn't received a response within the timeout.
+                if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
+                    self.receivableSubscribers.remove(at: index)
+                }
             }
             
-            // Continue only if the request and response ids match.
-            guard id == response.id else {
-                return
+            let completion = { (data: Data) in
+                // Attempt to decode the data to a matching type.
+                guard let response = try? JSONDecoder().decode(Response<U>.self, from: data) else {
+                    return
+                }
+                
+                // Continue only if the request and response ids match.
+                guard id == response.id else {
+                    return
+                }
+                
+                if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
+                    // Invalidate the current timeout timer which is running.
+                    self.receivableSubscribers[index].timer.invalidate()
+                        
+                    // Remove the receivable once the request has been paired with a matching response.
+                    self.receivableSubscribers.remove(at: index)
+                        
+                    completion(.success(response.result))
+                }
             }
             
-            if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
-                // Invalidate the current timeout timer which is running.
-                self.receivableSubscribers[index].timer.invalidate()
-                    
-                // Remove the receivable once the request has been paired with a matching response.
-                self.receivableSubscribers.remove(at: index)
-                    
-                completion(response.result)
+            receivableSubscribers.append(ReceivableSubscriber(id: id, timer: timer, completion: completion))
+            
+            let message = URLSessionWebSocketTask.Message.string(string)
+            webSocketTask?.send(message) { error in
+                if let error = error {
+                    print(error.localizedDescription)
+                }
             }
-        }
-        
-        receivableSubscribers.append(ReceivableSubscriber(id: id, timer: timer, completion: completion))
-        
-        let message = URLSessionWebSocketTask.Message.string(string)
-        webSocketTask?.send(message) { error in
-            if let error = error {
-                print(error.localizedDescription)
-            }
+        } catch {
+            completion(.failure(error))
         }
     }
     
