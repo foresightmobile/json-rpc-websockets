@@ -101,10 +101,6 @@ public class Client: NSObject {
         
         receivableSubscribers.append(ReceivableSubscriber(id: id, timer: timer, completion: completion))
         
-        #if DEBUG
-        print("--> \(string)")
-        #endif
-        
         let message = URLSessionWebSocketTask.Message.string(string)
         webSocketTask?.send(message) { error in
             if let error = error {
@@ -149,13 +145,7 @@ public class Client: NSObject {
             switch result {
             case .success(let message):
                 switch message {
-                case .data(let data):
-                    print("Received data: \(data.count)")
                 case .string(let string):
-                    #if DEBUG
-                    print("<-- \(string)")
-                    #endif
-                    
                     guard let data = string.data(using: .utf8) else {
                         return
                     }
@@ -172,7 +162,7 @@ public class Client: NSObject {
                         }
                     }
                 default:
-                    fatalError("Unknown success message received.")
+                    break
                 }
             case .failure(let error):
                 print(error.localizedDescription)
@@ -185,7 +175,7 @@ public class Client: NSObject {
     private func ping() {
         webSocketTask?.sendPing { error in
             if let error = error {
-                print("Error sending ping: \(error.localizedDescription)")
+                print(error.localizedDescription)
             } else {
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
                     self.ping()
