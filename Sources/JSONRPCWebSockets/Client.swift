@@ -7,14 +7,6 @@
 
 import Foundation
 
-//MARK: - Client Interface
-public class Client {
-    public static func getClient() -> ClientProvider {
-       //TODO: - use property or constructor injectionf for websockets mechanism
-        return ClientImpl()
-    }
-}
-
 public protocol ClientProvider: AnyObject {
     func connect(url: URL, queue: OperationQueue?, completion: @escaping () -> Void)
     func disconnect(completion: @escaping () -> Void)
@@ -25,31 +17,29 @@ public protocol ClientProvider: AnyObject {
     func unsubscribe(from method: String)
 }
 
-class ClientImpl: NSObject, ClientProvider {
-    private var urlSession: URLSession?
-    private var webSocketTask: URLSessionWebSocketTask?
-    
-    private var connectCompletion: (() -> Void)?
-    private var disconnectCompletion: (() -> Void)?
-    
+class ClientImpl: ClientProvider {
+
+    private let socket: WebSocketProvider
+
     private var receivableSubscribers = [ReceivableSubscriber]()
     private var notificationSubscribers = [NotificationSubscriber]()
     private let defaultInterval: TimeInterval = 5
+        
+    private var connectCompletion: (() -> Void)?
+    private var disconnectCompletion: (() -> Void)?
     
+    init(webSocketProvider: WebSocketProvider) {
+        self.socket = webSocketProvider
+        self.socket.delegate = self
+    }
+
     func connect(url: URL, queue: OperationQueue?, completion: @escaping () -> Void) {
+        socket.connect(url: url, queue: queue)
         connectCompletion = completion
-        
-        urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: queue)
-        webSocketTask = urlSession?.webSocketTask(with: url)
-        webSocketTask?.resume()
-        
-        receive()
-        ping()
     }
     
     func disconnect(completion: @escaping () -> Void) {
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
-        
+        socket.disconnect()
         disconnectCompletion = completion
     }
     
@@ -64,7 +54,7 @@ class ClientImpl: NSObject, ClientProvider {
             }
             
             let message = URLSessionWebSocketTask.Message.string(string)
-            webSocketTask?.send(message) { error in
+            socket.send(message: message) { error in
                 if let error = error {
                     completion(.failure(error))
                 } else {
@@ -91,14 +81,16 @@ class ClientImpl: NSObject, ClientProvider {
                 return
             }
             
-            let timer = Timer.scheduledTimer(withTimeInterval: timeout ?? defaultInterval, repeats: false) { timer in
+            let timer = Timer.scheduledTimer(withTimeInterval: timeout ?? defaultInterval, repeats: false) { [weak self] timer in
+                guard let self = self else { return }
                 // Remove the receivable if the request hasn't received a response within the timeout.
                 if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
                     self.receivableSubscribers.remove(at: index)
                 }
             }
             
-            let completion = { (data: Data) in
+            let completion = { [weak self] (data: Data) in
+                guard let self = self else { return }
                 // Attempt to decode the data to a matching type.
                 guard let response = try? JSONDecoder().decode(Response<U>.self, from: data) else {
                     return
@@ -123,8 +115,8 @@ class ClientImpl: NSObject, ClientProvider {
             receivableSubscribers.append(ReceivableSubscriber(id: id, timer: timer, completion: completion))
             
             let message = URLSessionWebSocketTask.Message.string(string)
-            webSocketTask?.send(message) { error in
-                if let error = error {
+            socket.send(message: message) { err in
+                if let error = err {
                     print(error.localizedDescription)
                 }
             }
@@ -144,7 +136,8 @@ class ClientImpl: NSObject, ClientProvider {
     
     func on<T: Codable>(method: String, type: T.Type, completion: @escaping (T) -> Void) {
         if let index = notificationSubscribers.firstIndex(where: { $0.method == method }) {
-            notificationSubscribers[index].completion = { data in
+            notificationSubscribers[index].completion = { [weak self] data in
+                guard let self = self else { return }
                 // Attempt to decode the data to a matching type.
                 let notification = try JSONDecoder().decode(Request<T>.self, from: data)
                 
@@ -164,58 +157,32 @@ class ClientImpl: NSObject, ClientProvider {
         }
     }
     
-    private func receive() {
-        webSocketTask?.receive { result in
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let string):
-                    guard let data = string.data(using: .utf8) else {
-                        return
-                    }
-                    
-                    self.receivableSubscribers.forEach {
-                        $0.completion(data)
-                    }
-                    
-                    self.notificationSubscribers.forEach {
-                        do {
-                            try $0.completion?(data)
-                        } catch {
-                            print(error.localizedDescription)
-                        }
-                    }
-                default:
-                    break
-                }
-            case .failure(let error):
-                print(error.localizedDescription)
-            }
-            
-            self.receive()
+    private func updateSubscribers(with data: Data) {
+        self.receivableSubscribers.forEach {
+            $0.completion(data)
         }
-    }
-    
-    private func ping() {
-        webSocketTask?.sendPing { error in
-            if let error = error {
+        
+        self.notificationSubscribers.forEach {
+            do {
+                try $0.completion?(data)
+            } catch {
                 print(error.localizedDescription)
-            } else {
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
-                    self.ping()
-                }
             }
         }
     }
 }
 
-//MARK: - URLSessionWebSocketDelegate
-extension ClientImpl: URLSessionWebSocketDelegate {
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+//MARK: - WebSocketProviderDelegate
+extension ClientImpl: WebSocketProviderDelegate {
+    func webSocketDidConnect(_ webSocket: WebSocketProvider) {
         connectCompletion?()
     }
     
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+    func webSocketDidDisconnect(_ webSocket: WebSocketProvider) {
         disconnectCompletion?()
+    }
+    
+    func webSocket(_ webSocket: WebSocketProvider, didReceiveData data: Data) {
+        self.updateSubscribers(with: data)
     }
 }
