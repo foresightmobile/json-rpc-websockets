@@ -83,6 +83,7 @@ class ClientImpl: ClientProvider {
             
             let timer = Timer.scheduledTimer(withTimeInterval: timeout ?? defaultInterval, repeats: false) { [weak self] timer in
                 guard let self = self else { return }
+
                 // Remove the receivable if the request hasn't received a response within the timeout.
                 if let index = self.receivableSubscribers.firstIndex(where: { $0.id == id }) {
                     self.receivableSubscribers.remove(at: index)
@@ -179,6 +180,7 @@ extension ClientImpl: WebSocketProviderDelegate {
     }
     
     func webSocketDidDisconnect(_ webSocket: WebSocketProvider) {
+
         disconnectCompletion?()
     }
     
