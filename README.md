@@ -5,7 +5,7 @@ JSON-RPC WebSockets is an open-source implementation of [JSON-RPC 2.0](https://w
 Inspired by [rpc-websockets](https://www.npmjs.com/package/rpc-websockets).
 
 ```swift
-let client = Client()
+let client: ClientProvider = Client.getClient()
 
 struct FeedUpdatedParameters: Codable {
 
