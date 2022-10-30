@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'JSONRPCWebSockets'
-  s.version          = '1.0.0'
+  s.version          = '1.0.1'
   s.summary          = 'WebSocket Client'
   s.homepage         = 'https://github.com/foresightmobile/json-rpc-websockets'
   s.license          = { :type => 'MIT', :file => 'LICENSE.txt' }
